@@ -17,23 +17,24 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 # 3. Load Multiple Data Files
+# Replace your current upload logic with this:
 @st.cache_resource
 def upload_data_files():
     files_to_upload = ['holdings.csv', 'trades.csv']
     uploaded_file_objects = []
     
-    try:
-        for file_name in files_to_upload:
-            # This looks for the files in the same folder as app.py
-            if os.path.exists(file_name):
-                file_obj = client.files.upload(file=file_name)
-                uploaded_file_objects.append(file_obj)
-            else:
-                st.warning(f"File {file_name} not found in directory. Please add it to your repo.")
-        return uploaded_file_objects
-    except Exception as e:
-        st.error(f"Error uploading data to Gemini: {e}")
-        return None
+    for file_name in files_to_upload:
+        if os.path.exists(file_name):
+            # MANUALLY SET THE MIME TYPE TO FIX THE WINDOWS ERROR
+            file_obj = client.files.upload(
+                file=file_name,
+                config={'mime_type': 'text/csv'} # This is the critical line
+            )
+            uploaded_file_objects.append(file_obj)
+        else:
+            st.error(f"Could not find {file_name}")
+            
+    return uploaded_file_objects
 
 # Get the list of file objects for the chat
 data_files = upload_data_files()
@@ -43,9 +44,10 @@ def chat_with_data(query):
         "You are a specialized Financial Data Bot. You have access to two files: 'holdings.csv' and 'trades.csv'. "
         "1. Use the code_execution tool to analyze data across BOTH files to find answers. "
         "2. For holdings questions, refer to 'holdings.csv'. For transaction/history questions, refer to 'trades.csv'. "
-        "3. When calculating totals, sum ALL relevant rows in the dataframes. "
-        "4. IF THE ANSWER IS NOT FOUND, respond with: 'Sorry, I cannot find that information in the provided data.' "
-        "5. Do not use outside knowledge."
+        "3. When calculating totals for a fund, you must sum ALL relevant rows (both positive and negative) to get the net result. Do not ignore losses."
+        "4. IF THE ANSWER IS NOT FOUND IN THE GIVEN FILES, you MUST respond with: 'Sorry can not find the answer'. "
+        "5. Do not use any outside knowledge or the internet to answer. "
+        "6. Do not provide explanations if the data is missing; only use the required phrase."
     )
 
     tools_config = [{'code_execution': {}}]
